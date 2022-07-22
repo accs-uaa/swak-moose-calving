@@ -1,4 +1,4 @@
-# Space Use and Movement Patterns of Moose in Southwest Alaska
+# Calving Season Habitat Preferences of Moose in Southwest Alaska
 Scripts for processing GPS telemetry data and analyzing properties of movement and space use of migratory and resident moose. 
 
 This project is a collaboration between the Alaska Center for Conservation Science and the Alaska Department of Fish and Game.
