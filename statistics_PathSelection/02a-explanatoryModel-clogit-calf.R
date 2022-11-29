@@ -18,6 +18,7 @@ git_dir <- "C:/Users/adroghini/Documents/Repositories/southwest-alaska-moose/pac
 
 #### Load packages & functions ----
 source(paste0(git_dir,"init.R"))
+source(paste0(git_dir,"function-iterateModelRun.R"))
 
 #### Load data ----
 calf <- read_csv(file=paste(pipeline_dir,
