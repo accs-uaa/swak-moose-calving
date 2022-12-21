@@ -11,7 +11,7 @@
 rm(list = ls())
 
 # Define Git directory ----
-git_dir <- "D:/Work/GitHub/southwest-alaska-moose/package_TelemetryFormatting/"
+git_dir <- "C:/ACCS_Work/GitHub/southwest-alaska-moose/package_TelemetryFormatting/"
 
 #### Load packages and functions ----
 source(paste0(git_dir,"init.R"))
@@ -95,6 +95,16 @@ gpsMove <- move::move(x=calvingSeason$Easting,y=calvingSeason$Northing,
 
 timeLag <- unlist(lapply(timeLag(gpsMove, units='hours'),  c, NA))
 summary(timeLag)
+
+# How many unique paths per female?
+calvingSeason %>% group_by(deployment_id) %>% distinct(mooseYear_id) %>% 
+  mutate(count = 1) %>% summarize(unique_paths = sum(count)) %>% ungroup() %>%  summarize(mean_paths = mean(unique_paths), stdev = sd(unique_paths), minim = min(unique_paths), maxim = max(unique_paths))
+
+# How many years per female?
+calvingSeason %>% mutate(year = lubridate::year(AKDT_Date)) %>% group_by(deployment_id) %>% distinct(year) %>% mutate(count = 1) %>% summarize(unique_years = sum(count)) %>% ungroup() %>%  summarize(mean_years = mean(unique_years), stdev = sd(unique_years), minim = min(unique_years), maxim = max(unique_years))
+
+# How many females present in all 3 years?
+calvingSeason %>% mutate(year = lubridate::year(AKDT_Date)) %>% group_by(deployment_id) %>% distinct(year) %>% mutate(count = 1) %>% summarize(unique_years = sum(count)) %>% filter(unique_years==max(unique_years)) %>% nrow()
 
 #### Export data ----
 # Save as .Rdata file

@@ -4,20 +4,22 @@
 
 # Author: A. Droghini (adroghini@alaska.edu)
 
+rm(list=ls())
+
 # Define Git directory ----
-git_dir <- "C:/Work/GitHub/southwest-alaska-moose/package_TelemetryFormatting/"
+git_dir <- "C:/ACCS_Work/GitHub/southwest-alaska-moose/package_TelemetryFormatting/"
 
 #### Load packages ----
 source(paste0(git_dir,"init.R"))
 
 # Load data ----
 
-data_file <- paste0(input_dir,"calving_status/calvingStatus_compiled_2018-2020.xlsx")
+data_file <- paste(input_dir,"calving_status/calvingStatus_compiled_2018-2020.xlsx", sep="/")
 calf2018 <- read_excel(data_file, sheet="2018",range="A1:Z67")
 calf2019 <- read_excel(data_file, sheet="2019",range="A1:AB84")
 calf2020 <- read_excel(data_file, sheet="2020",range="A1:W84")
 
-load(file=paste0(pipeline_dir,"01_createDeployMetadata/deployMetadata.Rdata"))
+load(file=paste(pipeline_dir,"01_createDeployMetadata/deployMetadata.Rdata", sep="/"))
 
 # Format data ----
 
@@ -53,7 +55,7 @@ calfData <- calfData %>%
 unique(calfData$calfStatus)
 unique(calfData$sensor_type)
 length(unique(subset(calfData,sensor_type=="GPS")$deployment_id)) # 24
-length(unique(subset(calfData,sensor_type=="VHF")$deployment_id)) #55
+length(unique(subset(calfData,sensor_type=="VHF")$deployment_id)) # 55
 
 #### Export data ----
 # As .csv file for data sharing
@@ -64,3 +66,56 @@ save(calfData,file=paste0(pipeline_dir,"01-formatParturienceVariable/","parturie
 
 # Clean workspace
 rm(list=ls())
+
+# Determine number of twins in sample ----
+# To address a reviewer's comments
+
+# Read in data
+calf2018 <- read_excel(data_file, sheet="2018",range="A1:AG67")
+calf2019 <- read_excel(data_file, sheet="2019",range="A1:AH84")
+calf2020 <- read_excel(data_file, sheet="2020",range="A1:Z84")
+
+load(file=paste(pipeline_dir,"01_createDeployMetadata/deployMetadata.Rdata", sep="/"))
+
+# From a later script
+load(file=paste(pipeline_dir,"04-formatForCalvingSeason/",
+                           "gpsCalvingSeason.Rdata",sep="/"))
+
+# Format data
+calf2018 <- calf2018 %>% 
+  select(Moose_ID,`Calves born`) %>% 
+  rename(Born = `Calves born`) %>% 
+  mutate(year = 2018)
+
+calf2019 <- calf2019 %>% 
+  filter(`Calves born` != "NA") %>% 
+  select(Moose_ID, `Calves born`) %>% 
+  rename(Born = `Calves born`) %>% 
+  mutate(Born = as.numeric(Born),
+         year = 2019)
+
+calf2020 <- calf2020 %>% 
+  select(Moose_ID, Born) %>% 
+  mutate(year = 2020)
+
+twins <- plyr::rbind.fill(calf2018,calf2019,calf2020)
+
+# Add collar ID using moose ID as a key
+deploy <- deploy %>% 
+  select(animal_id,deployment_id)
+
+twins <- left_join(twins,deploy,by=c("Moose_ID"="animal_id"))
+
+# Restrict to animals included in our final sample
+ids <- unique(calvingSeason$deployment_id)
+
+twins <- subset(twins, deployment_id %in% ids)
+
+# Calculate number of singletons, twins, etc. per year
+birth_data <- twins %>% mutate(count = 1 ) %>% group_by(year,Born) %>%
+  summarize(no_females = sum(count))
+
+# Calculate age of female at time of birth. Were non-maternal females less experienced? Could age distribution explain group-level patterns of habitat selection?
+birthday <- read_csv("C:/ACCS_Work/Projects/Moose_SouthwestAlaska/Manuscript/Revisions/birth_year_by_id.csv")
+
+twins <- left_join(twins,birthday,by=c("deployment_id"="id"))
