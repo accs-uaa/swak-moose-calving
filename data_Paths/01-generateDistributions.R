@@ -23,7 +23,7 @@ source(paste0(git_dir,"function-gammaDistribution.R"))
 source(paste0(git_dir,"function-vonMisesDistribution.R"))
 
 #### Load data ----
-load(file=paste(pipeline_dir,"04-formatForCalvingSeason/","gpsCalvingSeason.Rdata",sep="/"))
+load(file=paste(pipeline_dir,"04-formatForCalvingSeason","gpsCalvingSeason.Rdata",sep="/"))
 
 #### Explore movement metrics ----
 # Some deviation from uniform in bearings plot for cows with calves
