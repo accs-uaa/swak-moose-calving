@@ -9,9 +9,10 @@ output_dir <- file.path(drive, root_folder, "Data_03_Output","pathSelectionFunct
 library(tidyverse)
 
 # Statistics packages
-library(survival)
 library(infer)
 library(glmmTMB)
 
-# Functions
-source(paste0(git_dir,"function-iterateModelRun.R"))
+# Functions to fit model & extract estimates
+source(paste0(git_dir,"modelRunExploratory.R"))
+source(paste0(git_dir,"modelRunBootstrap.R"))
+source(paste0(git_dir,"summarizeModelEstimates.R"))
