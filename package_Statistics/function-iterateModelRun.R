@@ -8,7 +8,7 @@ iterateRun <- function(data, n_boot_sample, n_sample_size, ids, model_formula) {
   require(survival)
   require(infer)
 
-  source(paste0(git_dir,"function-createTable.R"))
+  source(paste0(git_dir,"summarizeModelEstimates.R"))
   
   # Create lists for storing results
   boot_list <- vector("list", length(ids))

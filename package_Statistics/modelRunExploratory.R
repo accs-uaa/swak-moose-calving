@@ -47,8 +47,16 @@ exploreModelFit <- function(data, sample_ids, model_formula) {
     # Tell glmmTMB not to change the last standard deviation
     # All other values are freely estimated (and are different from each other)
     y <- x-1
-    model_structure$mapArg = list(theta=factor(c(1:y, NA)))
     
+    if(y > 1) {
+      model_structure$mapArg = list(theta=factor(c(1:y, NA)))
+    }
+    
+    # Need to add exception for when model only includes a random intercept (no random slopes) i.e., y = 1, otherwise specifying map argument throws an error
+    if(y == 1) {
+      model_structure$mapArg = list(theta=factor(c(1, NA)))
+    }
+
     # Fit the model
     model_fit <- glmmTMB:::fitTMB(model_structure)
     
@@ -66,10 +74,13 @@ exploreModelFit <- function(data, sample_ids, model_formula) {
     random_coef <- ranef(model_fit)$cond$animal_id
 
     # Add results to lists
-    model_list[[1]][[n]] <-
-      model_table
-    model_list[[2]][[n]] <- random_coef
-
+    model_list[[1]][[n]] <- model_table
+    
+    # Only store to 2nd nested list (for random effect estimates) if model includes random slopes, otherwise no random effect table is produced and the function breaks.
+    if(y > 1) {
+      model_list[[2]][[n]] <- random_coef
+    }
+    
   rm(n)
   }
   return(model_list)

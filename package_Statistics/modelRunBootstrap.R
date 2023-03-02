@@ -19,9 +19,6 @@ iterateBootstrap <- function(data, n_boot_sample, n_sample_size, strata, model_f
   
   require(glmmTMB)
   require(infer)
-  
-  # Source function for summarizing results
-  source(paste("C:/ACCS_Work/Projects/Moose_SouthwestAlaska/Manuscript/Revisions/function-createTable-Poisson.R"))
 
   # Create lists for storing results
   boot_list <- vector("list", length(strata))
@@ -70,7 +67,15 @@ iterateBootstrap <- function(data, n_boot_sample, n_sample_size, strata, model_f
     # Tell glmmTMB not to change the last standard deviation
     # All other values are freely estimated (and are different from each other)
     y <- x-1
-    model_structure$mapArg = list(theta=factor(c(1:y, NA)))
+    
+    if(y > 1) {
+      model_structure$mapArg = list(theta=factor(c(1:y, NA)))
+    }
+    
+    # Need to add exception for when model only includes a random intercept (no random slopes) i.e., y = 1, otherwise specifying map argument throws an error
+    if(y == 1) {
+      model_structure$mapArg = list(theta=factor(c(1, NA)))
+    }
     
     # Fit the model
     model_fit <- glmmTMB:::fitTMB(model_structure)
@@ -89,9 +94,11 @@ iterateBootstrap <- function(data, n_boot_sample, n_sample_size, strata, model_f
     random_coef <- ranef(model_fit)$cond$animal_id
     
     # Add results to lists
-    model_list[[1]][[n]] <-
-      model_table
+    model_list[[1]][[n]] <- model_table
+    
+    if(y > 1) {
     model_list[[2]][[n]] <- random_coef
+    }
     
     rm(n)
   }
