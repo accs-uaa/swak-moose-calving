@@ -1,75 +1,84 @@
-# Objective: Format data: Rename columns, recode collar ID to account for redeployments.
+# -*- coding: utf-8 -*-
+# ---------------------------------------------------------------------------
+# Format GPS data
+# Author: Amanda Droghini, Alaska Center for Conservation Science
+# Last Updated: 2023-10-05
+# Usage: Code chunks must be executed sequentially in R Studio or R Studio Server installation.
+# Description: "Format GPS data" projects location coordinates, re-codes collar ID to account for redeployments, and renames column.
+# ---------------------------------------------------------------------------
 
-# Author: A. Droghini (adroghini@alaska.edu)
-#         Alaska Center for Conservation Science
+rm(list=ls())
 
-# Define Git directory ----
-git_dir <- "C:/Work/GitHub/southwest-alaska-moose/package_TelemetryFormatting/"
+# Load packages ----
+library(dplyr)
+library(readr)
+library(sf)
+library(tidyr)
 
-#### Load packages and functions ----
-source(paste0(git_dir,"init.R"))
-source(paste0(git_dir,"function-collarRedeploys.R"))
+# Define directories ----
+drive <- "D:"
+root_folder <- "ACCS_Work/Projects/Moose_SouthwestAlaska"
+input_dir <- file.path(drive, root_folder, "Data_01_Input")
+pipeline_dir <- file.path(drive, root_folder, "Data_02_Pipeline")
 
-#### Load data----
-load(paste0(pipeline_dir,"01_importData/gpsRaw.Rdata")) # GPS telemetry data
-load(paste0(pipeline_dir,"01_createDeployMetadata/deployMetadata.Rdata")) # Deployment metadata file
+# Define code repository ----
+git_dir <- file.path(drive, "ACCS_Work/GitHub/swak-moose-calving/package_TelemetryFormatting")
 
+# Load functions ----
+source(file.path(git_dir,"function-collarRedeploys.R"))
 
-#### Format GPS data----
+# Define inputs ----
+gps_file <- file.path(pipeline_dir,"01_importData/raw_gps_data.csv")
+deploy_file <- file.path(pipeline_dir,"01_createDeployMetadata/deployMetadata.Rdata")
 
+# Load data ----
+gpsData <- read_csv(gps_file)
+load(deploy_file)
+
+# Format GPS data ----
 # 1. Filter out records for which Date Time, Lat, or Lon is NA
-# 2. Filter out records with long values of 13.xx, which is in Germany where collars are manufactured
-# 3. Combine date and time in a single column ("datetime")
-## Use UTC time zone to conform with Movebank requirements
-# 4. Rename Latitude.... ; Longitude.... ; Temp...C. ; Height..m.
+# 2. Filter out records with longitude values that are beyond the easternmost extent of our study area boundary. Some fixes had values of 13.xx, which is in Germany where collars are manufactured. 
+# 3. Combine date and time in a single column ("datetime"). Use UTC rather than local time to conform with Movebank requirements.
+# 4. Rename columns
 gpsData <- gpsData %>%
-  dplyr::mutate(datetime = as.POSIXct(paste(gpsData$UTC_Date, gpsData$UTC_Time),
-                               format="%m/%d/%Y %I:%M:%S %p",tz="UTC")) %>%
+  dplyr::mutate(datetime = as.POSIXlt(paste(gpsData$UTC_Date, gpsData$UTC_Time),
+                               format="%m/%d/%Y %H:%M:%S",tz="GMT")) %>%
   dplyr::rename(longX = "Longitude....", latY = "Latitude....", tag_id = CollarID,
                 mortalityStatus = "Mort..Status") %>%
   filter(!(is.na(longX) | is.na(latY) | is.na(UTC_Date))) %>%
-  filter(longX < -153) # Eastern extent of study area boundary
+  filter(longX < -153)
 
-#### Generate Eastings and Northings----
-# This makes calculation of movement metrics easier
-# Even if present in original data, I would recalculate them since they seem spotty i.e., NAs even though lat/long are known.
+# QA/QC to make sure the datetime was coded properly
+gpsData %>% filter(is.na(gpsData$datetime))
 
-coordLatLong <- SpatialPoints(cbind(gpsData$longX, gpsData$latY), proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
-coordLatLong # check that signs are correct
+# Project coordinates ----
+# Convert coordinates to sf object
+# Use EPSG:3338 (NAD83 / Alaska Albers)
+gpsData <- st_as_sf(gpsData, coords = c("longX", "latY"), crs = 4326, remove = FALSE)
+gpsData <- st_transform(gpsData, crs = 3338)
 
-# Transform to projected coordinates
-# Use EPSG=3338 (Alaska Albers, NAD 83 datum)
-coordUTM <- spTransform(coordLatLong, CRS("+init=epsg:3338"))
-coordUTM <- as.data.frame(coordUTM)
-gpsData$Easting <- coordUTM[,1]
-gpsData$Northing <- coordUTM[,2]
+# st_coordinates(gpsData[,1]) # to extract geometry
 
-summary(gpsData)
-rm(coordUTM,coordLatLong)
-
-#### Correct redeploys----
-
-# Filter deployment metadata to include only GPS data and redeploys
-# Redeploys are differentiated from non-redeploys because they end in a letter
+# Correct redeploys ----
+# Identify which collars have been redeployed. Redeployed collars are differentiated from non-redeploys because they end in a letter
 redeployList <- deploy %>%
   filter(sensor_type == "GPS" & (grepl(paste(letters, collapse="|"), deployment_id))) %>%
   dplyr::select(deployment_id,tag_id,deploy_on_timestamp,deploy_off_timestamp)
+
+gpsData <- gpsData %>% 
+  mutate(tagStatus = case_when(tag_id %in% redeployList$tag_id ~ "redeploy",
+                               .default = "unique"))
+
 
 # Format LMT Date column as POSIX data type for easier filtering
 gpsData$LMT_Date = as.POSIXct(strptime(gpsData$LMT_Date,
                                        format="%m/%d/%Y",tz="America/Anchorage"))
 
-# Use tagRedeploy function to evaluate whether a tag is unique or has been redeployed
-gpsData$tagStatus <- tagRedeploy(gpsData$tag_id,redeployList$tag_id)
-
-# The next part is janky because my function writing skills are not great
-# The makeRedeploysUnique function only works on redeploys
-# Need to filter out redeploys & then merge back in with the rest of the data
-# The function also identifies "errors" e.g. when the collar is left active in the office between deployments. I need to filter these out manually before merging back
+# Split dataset into two and apply function to redeploys
 gpsRedeployOnly <- subset(gpsData,tagStatus=="redeploy")
 gpsUniqueOnly <- subset(gpsData,tagStatus!="redeploy")
 
-gpsRedeployOnly$deployment_id <- apply(X=gpsRedeployOnly,MARGIN=1,FUN=makeRedeploysUnique,redeployData=redeployList)
+gpsRedeployOnly$deployment_id <- apply(X=gpsRedeployOnly,MARGIN=1,FUN=makeRedeploysUnique,redeployData=redeployList) # Throws an error as of 2023-10-05
 
 # Filter out errors
 # Combine redeploy with non-redeploys

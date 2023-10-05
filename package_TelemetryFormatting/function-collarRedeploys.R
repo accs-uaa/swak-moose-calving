@@ -15,14 +15,6 @@
 
 #4. Would be more convenient if the user could specify the name of the tag ID and Date columns. Right now, tagID columns has to be called tag_id and date column has to be called LMT_Date. Same for redeployList- columns must be named tag_id, deploy_on_timestamp, and deploy_off_timestamp. Again, this is because I can't figure out how to have that work with the apply function.
 
-# Evaluate whether tag was redeployed----
-# The function takes two arguments: a vector of (non-unique) tag/collars IDs and a vector of collar IDs that have been redeployed
-# It returns a tag status that specifies where the tag is unique or has been redeployed
-
-tagRedeploy <- function(tagList,redeployList) {
-  tagStatus <- ifelse(tagList %in% redeployList, "redeploy","unique")
-}
-
 # Uniquely code redeploys----
 # This function appends letters to non-unique tag IDs (i.e. identified as "redeploy" by function tagRedeploy)
 # Only works if there is one redeploy
@@ -56,40 +48,3 @@ makeRedeploysUnique <- function(tagData, redeployData) {
   }
   deployment_id  
 } 
-
-# Attempt at merging both functions together----
-# I can't figure out a why to run this either on its own (only operates on first index) or as an apply function (has an extra argument)
-
-failedFunction <- function(tagID,fixDate,redeployList,redeployID, dateOn, dateOff) {
-  
-  tagStatus <- ifelse(tagID %in% redeployID, "redeploy",paste0("M",tagID,sep=""))
-  
-  if (tagStatus == "redeploy"){
-    
-    redeploySubset <- subset(redeployList, redeployID == tagID)
-    
-    i = nrow(redeploySubset)
-    
-    if (fixDate >= dateOn[i-1] & fixDate <= dateOff[i-1]) {
-      
-      deployment_id = paste("M",tagID,"a",sep="")
-      
-    } else if (fixDate >= dateOn[i]) {
-      
-      deployment_id = paste("M",tagID,"b",sep="")
-      
-    } else {
-      deployment_id = "error"
-    }
-  }
-  else {
-    deployment_id = tagStatus
-  }
-  deployment_id
-}
-
-rm(failedFunction)
-
-# test$new_id <- failedFunction(test$tag_id,test$LMT_Date,redeployList,redeployList$tag_id,redeployList$deploy_on_timestamp,redeployList$deploy_off_timestamp)
-# test$new_id<-apply(X=test,MARGIN=1,FUN=failedFunction,test$tag_id,test$LMT_Date,redeployList,redeployList$tag_id,redeployList$deploy_on_timestamp,redeployList$deploy_off_timestamp)
-      
