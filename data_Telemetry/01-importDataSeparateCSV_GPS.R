@@ -7,29 +7,44 @@
 # Description: "Import GPS data from Separate CSVs" reads all data containing GPS locations from moose collars, excludes mortality files, and combines files into a single dataframe that can be used for analyses. GPS data were last downloaded on 2021-03-14.
 # ---------------------------------------------------------------------------
 
-# Define Git directory ----
-git_dir <- "C:/Work/GitHub/southwest-alaska-moose/package_TelemetryFormatting/"
+rm(list=ls())
 
-#### Load packages ----
-source(paste0(git_dir,"init.R"))
+# Load packages ----
+library(plyr)
+library(readr)
+library(tidyr)
+library(dplyr)
 
-# Load data files ----
+# Define directories ----
+drive <- "D:"
+root_folder <- "ACCS_Work/Projects/Moose_SouthwestAlaska"
+input_dir <- file.path(drive, root_folder, "Data_01_Input")
+pipeline_dir <- file.path(drive, root_folder, "Data_02_Pipeline")
+
+# Define inputs ----
 # Use pattern="GPS" to drop Mortality files
 # Should have 22 files
 filePath <- paste0(input_dir,"/telemetry")
 dataFiles <- list.files(file.path(filePath),full.names = TRUE,pattern="GPS")
 
-# Read in each file and combine into single dataframe
-# "No" column is not unique across all individuals, but is unique within each individual
-# Doesn't really matter whether No is by increasing or decreasing date since we will reorder use the datetime column.
+# Define outputs ----
+output_path <- file.path(pipeline_dir,"01_importData","raw_gps_data.csv")
+
+# Load data ----
+
+# Decipher encoding since column names have non-ASCII characters
+guess_encoding(dataFiles[1])
+
+# Read each file and combine into single dataframe
+# Select only relevant columns
+# See https://www.vectronic-aerospace.com/wp-content/uploads/2016/04/Manual_GPS-Plus-X_v1.2.1.pdf) page 125 for meaning of column names
 
 for (i in 1:length(dataFiles)) {
   f <- dataFiles[i]
 
-  temp <- read.csv(f,stringsAsFactors = FALSE)
-
-  temp <- temp %>%
-  arrange(No)
+  temp <- read_csv(f, locale = locale(encoding = "ISO-8859-1"),
+                   col_select=c(1:6,13,14,16,17,44),
+                   name_repair = make.names)
 
   if (i == 1) {
     gpsData <- temp
@@ -39,32 +54,15 @@ for (i in 1:length(dataFiles)) {
   }
 }
 
-# Remove extra columns----
-names(gpsData)
-summary(gpsData)
-length(unique(gpsData$CollarID))
+# Verify that all individuals have been imported (should include the number of files)
+length(unique(gpsData$CollarID)) == length(dataFiles)
 
-# List of changes to make to dataframe:
-# See https://www.vectronic-aerospace.com/wp-content/uploads/2016/04/Manual_GPS-Plus-X_v1.2.1.pdf) page 125 for meaning of column names
+# Clear virtual memory
+rm(temp,dataFiles,f,i)
+gc()
 
-# Drop the following columns:
-# 1. "Activity", "X3D_Error..m."
-# Reason: Columns have the same value across all rows
-# 2. "Main..V.", "Beacon..V."
-# Reason: Unnecessary for analyses, tells you about collar battery life
-# 3. "SCTS_Date", "SCTS_Time"
-# Reason: this is not the date/time of the fix
-# All C.N. and Sat/Sats columns. Reason: All NAs
-# 5. ECEF columns
-# 6. No.1 and No.2. Reason: Duplicate from No
-# Reason: No need for "earth-fixed" coordinates (https://en.wikipedia.org/wiki/ECEF). Use UTM or Lat/Long
+# Export as CSV ----
+write_csv(gpsData, file=output_path)
 
-gpsData <- gpsData %>%
-  dplyr::select(No, CollarID, UTC_Date,UTC_Time, LMT_Date, LMT_Time,
-         Latitude....,Longitude....,Mort..Status,DOP,FixType,Easting,Northing)
-
-####Export----
-save(gpsData, file=paste0(pipeline_dir,"01_importData/gpsRaw.Rdata"))
-
-# Clean workspace
+# Clean workspace ----
 rm(list=ls())
