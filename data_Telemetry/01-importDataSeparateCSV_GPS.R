@@ -1,9 +1,11 @@
-# Objective: Import data from GPS collars. Combine all data files into a single dataframe that can be used for analyses. Data for each moose are stored as separate .csv files
-
-# Last data download: 14 Mar 2021 by Kassie
-
-# Author: A. Droghini (adroghini@alaska.edu)
-#         Alaska Center for Conservation Science
+# -*- coding: utf-8 -*-
+# ---------------------------------------------------------------------------
+# Import GPS data from Separate CSVs
+# Author: Amanda Droghini, Alaska Center for Conservation Science
+# Last Updated: 2023-10-05
+# Usage: Code chunks must be executed sequentially in R Studio or R Studio Server installation.
+# Description: "Import GPS data from Separate CSVs" reads all data containing GPS locations from moose collars, excludes mortality files, and combines files into a single dataframe that can be used for analyses. GPS data were last downloaded on 2021-03-14.
+# ---------------------------------------------------------------------------
 
 # Define Git directory ----
 git_dir <- "C:/Work/GitHub/southwest-alaska-moose/package_TelemetryFormatting/"
