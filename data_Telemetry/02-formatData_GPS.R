@@ -16,7 +16,7 @@ library(sf)
 library(tidyr)
 
 # Define directories ----
-drive <- "D:"
+drive <- "C:"
 root_folder <- "ACCS_Work/Projects/Moose_SouthwestAlaska"
 input_dir <- file.path(drive, root_folder, "Data_01_Input")
 pipeline_dir <- file.path(drive, root_folder, "Data_02_Pipeline")
@@ -59,24 +59,71 @@ gpsData <- st_transform(gpsData, crs = 3338)
 
 # st_coordinates(gpsData[,1]) # to extract geometry
 
-# Correct redeploys ----
+# Format deployment file ----
 # Identify which collars have been redeployed. Redeployed collars are differentiated from non-redeploys because they end in a letter
 redeployList <- deploy %>%
   filter(sensor_type == "GPS" & (grepl(paste(letters, collapse="|"), deployment_id))) %>%
   dplyr::select(deployment_id,tag_id,deploy_on_timestamp,deploy_off_timestamp)
 
+# Convert to wide format
+redeployList <- redeployList %>% 
+  mutate(sequence = rep(c("a","b"),times=2)) %>% 
+  select(-deployment_id) %>% 
+  pivot_wider(names_from = sequence,
+                             values_from=c(deploy_on_timestamp,deploy_off_timestamp)) %>% 
+  mutate(deploy_off_timestamp_b = Sys.Date())
+
+# Code redeploys ----
 gpsData <- gpsData %>% 
   mutate(tagStatus = case_when(tag_id %in% redeployList$tag_id ~ "redeploy",
                                .default = "unique"))
 
 
-# Format LMT Date column as POSIX data type for easier filtering
+# Format date columns as LMT timezones
 gpsData$LMT_Date = as.POSIXct(strptime(gpsData$LMT_Date,
                                        format="%m/%d/%Y",tz="America/Anchorage"))
+
+### Need to do it for redeployList too
 
 # Split dataset into two and apply function to redeploys
 gpsRedeployOnly <- subset(gpsData,tagStatus=="redeploy")
 gpsUniqueOnly <- subset(gpsData,tagStatus!="redeploy")
+
+# Run for loop
+redeploy_tags <- unique(redeployList$tag_id)
+
+for (a in 1:length(redeploy_tags)) {
+  
+  tag <- redeploy_tags[a]
+  cat("working on tag...", tag, "\n")
+  
+  redeploy_df <- gpsData %>% 
+    filter(tag_id == tag)
+  
+  redeploy_df$tag_id <- as.character(redeploy_df$tag_id)
+  
+  # Merge with redeployList to get start/drop-off times
+  redeploy_df <- left_join(redeploy_df,redeployList,by="tag_id")
+
+  for (b in 1:nrow(redeploy_df)) {
+    date <- redeploy_df$LMT_Date[b]
+    start1 <- redeploy_df$deploy_on_timestamp_a[b]
+    end1 <- redeploy_df$deploy_off_timestamp_a[b]
+    start2 <- redeploy_df$deploy_on_timestamp_b[b]
+
+      if (date >= start1 & date <= end1) {
+        deployment_id = paste("M",tag,"a",sep="")
+      } else if (date >= start2) {
+        
+        deployment_id = paste("M",tag,"b",sep="")
+        
+      } else {
+        deployment_id = "error"
+      }
+    return(redeploy_df) 
+  }
+}
+
 
 gpsRedeployOnly$deployment_id <- apply(X=gpsRedeployOnly,MARGIN=1,FUN=makeRedeploysUnique,redeployData=redeployList) # Throws an error as of 2023-10-05
 
