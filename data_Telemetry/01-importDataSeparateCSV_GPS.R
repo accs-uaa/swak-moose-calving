@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # Import GPS data from Separate CSVs
 # Author: Amanda Droghini, Alaska Center for Conservation Science
-# Last Updated: 2023-10-05
+# Last Updated: 2023-10-06
 # Usage: Code chunks must be executed sequentially in R Studio or R Studio Server installation.
 # Description: "Import GPS data from Separate CSVs" reads all data containing GPS locations from moose collars, excludes mortality files, and combines files into a single dataframe that can be used for analyses. GPS data were last downloaded on 2021-03-14.
 # ---------------------------------------------------------------------------
@@ -10,13 +10,12 @@
 rm(list=ls())
 
 # Load packages ----
-library(plyr)
 library(readr)
 library(tidyr)
 library(dplyr)
 
 # Define directories ----
-drive <- "D:"
+drive <- "C:"
 root_folder <- "ACCS_Work/Projects/Moose_SouthwestAlaska"
 input_dir <- file.path(drive, root_folder, "Data_01_Input")
 pipeline_dir <- file.path(drive, root_folder, "Data_02_Pipeline")
@@ -50,7 +49,7 @@ for (i in 1:length(dataFiles)) {
     gpsData <- temp
 
   } else {
-    gpsData <- plyr::rbind.fill(gpsData, temp)
+    gpsData <- dplyr::bind_rows(gpsData, temp)
   }
 }
 
