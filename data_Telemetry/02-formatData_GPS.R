@@ -4,14 +4,16 @@
 # Author: Amanda Droghini, Alaska Center for Conservation Science
 # Last Updated: 2023-10-10
 # Usage: Code chunks must be executed sequentially in R Studio or R Studio Server installation.
-# Description: "Format GPS data" projects location coordinates, re-codes collar ID to account for redeployments, and renames column.
+# Description: "Format GPS data" projects location coordinates, re-codes collar ID to account for re-deployments, removes post-mortality locations, and renames column.
 # ---------------------------------------------------------------------------
 
 rm(list=ls())
 
 # Load packages ----
 library(dplyr)
+library(move2)
 library(readr)
+library(sf)
 library(tidyr)
 
 # Define directories ----
@@ -59,7 +61,7 @@ redeployList <- deploy %>%
 redeployList <- redeployList %>% 
   mutate(sequence = rep(c("a","b"),times=2)) %>% 
   select(-deployment_id) %>% 
-  pivot_wider(names_from = sequence,
+  tidyr::pivot_wider(names_from = sequence,
                              values_from=c(deploy_on_timestamp,deploy_off_timestamp)) %>% 
   mutate(deploy_off_timestamp_b = Sys.Date()) %>% 
   mutate(across(deploy_on_timestamp_a:deploy_off_timestamp_b,
@@ -115,6 +117,8 @@ gpsData <- gpsData %>%
 # Check for correct number of collars (should be 24)
 length(unique(gpsData$deployment_id))
 
+rm(a,tag,start1,start2,end1, redeploy_df,redeploy_time,gpsRedeploy,redeployList)
+
 # Format corrected dataset ----
 # Create unique row number, RowID, for each device in ascending order according to date/time. Note that RowID will be unique within but not across individuals. This will replace the "No" column that exists in the original GPS data.
 # Drop unnecessary columns
@@ -134,11 +138,128 @@ group_by(deployment_id) %>%
 # Join with deployment metadata to get individual animal ID
 # Useful when uploading into Movebank.
 deploy <- deploy %>% dplyr::select(animal_id,deployment_id)
-
 gpsData <- left_join(gpsData,deploy,by="deployment_id")
 
+# Remove mortality data ----
+# Collars performed really well and only had minor problems
+# Largely outside of calving season and linked with mortality or start of deployment
+
+# In previous iteration of the code, I looked at each ID manually to pinpoint issues related to missed fixes. On top of being time-consuming, the exercise revealed 2 primary issues that explained probably 99.9% of the missed fixes:
+# 1) Individual had died (oftentimes the individual died several hours/days before the first mortality signal was received)
+# 2) Collar had just been deployed (some collars took ~5-7 fixes before starting to send consistent fix rates; one collar sent out a "Mortality" signal a few hours after being placed)
+
+# Automated version: Run through each id. Delete the first 10 data points. Detect the first instance when the collar recorded a "Mortality no radius" signal (if signal was detected). Delete every instance after that (print out a warning if number of points > 100) and the 84 points preceding that (equivalent to 1 week of data).
+
+ids <- unique(gpsData$deployment_id)
+
+for (i in 1:length(ids)){
+  
+  cat("working on individual...", ids[i], "\n")
+  
+  gps_subset <- gpsData %>% 
+    filter(deployment_id == ids[i]) %>% 
+    filter(RowID > 10)
+  
+  mort_idx <- gps_subset %>% 
+    filter(mortalityStatus=="Mortality no radius")
+  
+  if(nrow(mort_idx) > 0){ 
+    mort_idx <- min(mort_idx$RowID-84)
+    difference <- nrow(gps_subset)-mort_idx
+    
+    if (difference > 200) {
+      cat("Discarding...", difference, "rows out of...", nrow(gps_subset), "\n")
+    }
+    
+    gps_subset <- gps_subset %>% 
+      filter(RowID < mort_idx)
+  } else {
+  }
+  
+  if (i == 1) {
+    gpsClean <- gps_subset
+  } else {
+    gpsClean <- bind_rows(gpsClean,gps_subset)
+  }
+}
+
+# Total number of rows deleted (n=6769, or 2.75% of the dataset) is only slightly higher than in the previous, manual interation (n= 5976 / 2.4% of the data)
+rm(gpsData,gps_subset,mort_idx,i)
+
+# Recode RowID
+gpsClean <- gpsClean %>%
+  group_by(deployment_id) %>%
+  arrange(datetime) %>%
+  dplyr::mutate(RowID = row_number(datetime)) %>%
+  arrange(deployment_id,RowID)
+
+# Calculate time between fixes ----
+
+# Project coordinates
+# Convert to sf object; this works well with the move2 package
+# Use EPSG:3338 (NAD83 / Alaska Albers)
+gpsClean <- st_as_sf(gpsClean, 
+                     coords = c("longX", "latY"), 
+                     crs = 4326, remove = FALSE)
+gpsClean <- st_transform(gpsClean, crs = 3338)
+
+# Convert to move object
+gpsMove <- mt_as_move2(gpsClean, 
+                       time_column="datetime", 
+                       sf_column_name = c("geometry"),
+                       track_id_column="deployment_id",
+                       crs = 3338)
+
+mt_n_tracks(gpsMove) # no of individuals
+table(mt_track_id(gpsMove)) # no of locations per individuals
+
+# Ensure dataframe is ordered properly
+gpsMove <- gpsMove %>%
+  arrange(deployment_id,RowID)
+
+# Calculate time between locations ----
+# Express as hours to match programmed fix rate (2 hours)
+gpsMove$timeLags <- mt_time_lags(gpsMove)
+gpsMove$timeLags <- units::set_units(gpsMove$timeLags, h)
+gpsMove$timeLags <- as.numeric(gpsMove$timeLags)
+
+# Filter entries for which time lags are below a certain threshold
+# In this dataset, most entries with time lags < 2 hours are either very close to zero (i.e., duplicated fixes) or >1.5 hours. I picked 0.6, but the difference in the number of rows between 0.1, 0.2, 0.3, ... 1.5 are minimal
+gpsMove <- gpsMove %>% filter(!(timeLags<0.6))
+
+# Calculate new time lags
+gpsMove$timeLags <- mt_time_lags(gpsMove)
+gpsMove$timeLags <- units::set_units(gpsMove$timeLags, h)
+gpsMove$timeLags <- as.numeric(gpsMove$timeLags)
+
+# Calculate descriptive statistics
+# To provide a sense of how well the collars performed for each individual
+for (i in 1:length(ids)){
+  
+  cat("working on individual...", ids[i], "\n")
+  
+  gps_subset <- gpsMove %>% 
+    filter(deployment_id == ids[i] & !is.na(timeLags))
+  
+  summary <- data.frame(row.names = ids[i])
+  summary$id <- ids[i]
+  summary$min <- min(gps_subset$timeLags)
+  summary$mean <- mean(gps_subset$timeLags)
+  summary$sd <- sd(gps_subset$timeLags)
+  summary$max <- max(gps_subset$timeLags)
+  
+  if (i == 1) {
+    time_summary <- summary
+  } else {
+    time_summary <- bind_rows(time_summary,summary)
+  }
+}
+
+# Clearly some missed fixes in the dataset, but we can deal with those on a case-by-case basis as we progress in our analyses
+
 # Export data ----
-write_csv(gpsData, file=output_path)
+gpsClean <- as.data.frame(gpsMove)
+write_csv(gpsClean, file=output_path)
 
 # Clean workspace ----
 rm(list = ls())
