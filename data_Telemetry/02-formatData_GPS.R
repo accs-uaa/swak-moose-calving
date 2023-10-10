@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # Format GPS data
 # Author: Amanda Droghini, Alaska Center for Conservation Science
-# Last Updated: 2023-10-09
+# Last Updated: 2023-10-10
 # Usage: Code chunks must be executed sequentially in R Studio or R Studio Server installation.
 # Description: "Format GPS data" projects location coordinates, re-codes collar ID to account for redeployments, and renames column.
 # ---------------------------------------------------------------------------
@@ -12,7 +12,6 @@ rm(list=ls())
 # Load packages ----
 library(dplyr)
 library(readr)
-library(sf)
 library(tidyr)
 
 # Define directories ----
@@ -24,6 +23,9 @@ pipeline_dir <- file.path(drive, root_folder, "Data_02_Pipeline")
 # Define inputs ----
 gps_file <- file.path(pipeline_dir,"01_importData/raw_gps_data.csv")
 deploy_file <- file.path(pipeline_dir,"01_createDeployMetadata/deployMetadata.Rdata")
+
+# Define output ----
+output_path <- file.path(pipeline_dir,"02_formatData","gps_data.csv")
 
 # Load data ----
 gpsData <- read_csv(gps_file)
@@ -46,14 +48,6 @@ gpsData <- gpsData %>%
 # QA/QC to make sure the datetime was coded properly
 gpsData %>% filter(is.na(gpsData$datetime))
 
-# Project coordinates ----
-# Convert coordinates to sf object
-# Use EPSG:3338 (NAD83 / Alaska Albers)
-gpsData <- st_as_sf(gpsData, coords = c("longX", "latY"), crs = 4326, remove = FALSE)
-gpsData <- st_transform(gpsData, crs = 3338)
-
-# st_coordinates(gpsData[,1]) # to extract geometry
-
 # Format deployment file ----
 # Identify which collars have been redeployed. Redeployed collars are differentiated from non-redeploys because they end in a letter
 redeployList <- deploy %>%
@@ -73,7 +67,6 @@ redeployList <- redeployList %>%
                              tz="GMT")),
          across(deploy_on_timestamp_a:deploy_off_timestamp_b, ~ as.Date(.x)))
          
-
 # Code redeploys ----
 gpsData$tag_id <- as.character(gpsData$tag_id)
 gpsData$deployment_id <- as.character(NA)
@@ -122,11 +115,10 @@ gpsData <- gpsData %>%
 # Check for correct number of collars (should be 24)
 length(unique(gpsData$deployment_id))
 
-# Final formatting ----
-# Create unique row number, RowID, for each device in ascending order according to date/time. Note that RowID will be unique within but not across individuals.
+# Format corrected dataset ----
+# Create unique row number, RowID, for each device in ascending order according to date/time. Note that RowID will be unique within but not across individuals. This will replace the "No" column that exists in the original GPS data.
 # Drop unnecessary columns
 # Create unique mooseYear ID
-
 gpsData <- gpsData %>%
   mutate(mooseYear = paste(deployment_id,
                            as.numeric(format(gpsData$UTC_Date[1], "%Y")),
@@ -145,12 +137,8 @@ deploy <- deploy %>% dplyr::select(animal_id,deployment_id)
 
 gpsData <- left_join(gpsData,deploy,by="deployment_id")
 
-# Coerce back to dataframe (needed for move package)
-gpsData <- as.data.frame(gpsData)
+# Export data ----
+write_csv(gpsData, file=output_path)
 
-##### Export data ----
-# Save as .Rdata file
-save(gpsData, file=paste0(pipeline_dir,"02_formatData/gpsData_formatted.Rdata"))
-
-#### Clean workspace ----
+# Clean workspace ----
 rm(list = ls())
