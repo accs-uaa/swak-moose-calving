@@ -129,7 +129,7 @@ rm(subsetOutlier,plotOutliers)
 # Restart from move object since we will have to recalculate speed and distances
 
 gpsClean <- gpsClean %>%
-  filter(!(deployment_id == "M####7" & RowID == 5789 |
+  filter(!(deployment_id == "M#####" & RowID == 5789 |
              deployment_id=="M####" & RowID == 5778 |
              deployment_id=="M####" & RowID == 4894 |
              deployment_id == "M####" & RowID == 2351 |
