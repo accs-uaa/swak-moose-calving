@@ -11,6 +11,7 @@ rm(list=ls())
 
 # Load packages ----
 library(dplyr)
+library(lubridate)
 library(move2)
 library(readr)
 library(sf)
@@ -122,17 +123,18 @@ rm(a,tag,start1,start2,end1, redeploy_df,redeploy_time,gpsRedeploy,redeployList)
 # Format corrected dataset ----
 # Create unique row number, RowID, for each device in ascending order according to date/time. Note that RowID will be unique within but not across individuals. This will replace the "No" column that exists in the original GPS data.
 # Drop unnecessary columns
-# Create unique mooseYear ID
+# Create unique mooseYear ID based on local datetime
 gpsData = gpsData %>%
-  mutate(mooseYear = paste(deployment_id,
-                           as.numeric(format(gpsData$UTC_Date[1], "%Y")),
+  mutate(LMT_Date = as.Date(LMT_Date, format = "%m/%d/%Y"),
+    mooseYear = paste(deployment_id,
+                           as.numeric(year(LMT_Date)),
                            sep=".")) %>% 
 group_by(deployment_id) %>%
   arrange(datetime) %>%
   dplyr::mutate(RowID = row_number(datetime)) %>%
   arrange(deployment_id,RowID) %>%
   ungroup() %>%
-  dplyr::select(-c(No,LMT_Date,LMT_Time,tag_id)) %>%
+  dplyr::select(-c(No,tag_id)) %>%
   dplyr::select(RowID,everything())
 
 # Join with deployment metadata to get individual animal ID
