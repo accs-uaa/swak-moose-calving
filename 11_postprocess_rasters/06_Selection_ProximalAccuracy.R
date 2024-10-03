@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
-# Calculate Independent Validation
+# Calculate proximal accuracy
 # Author: Timm Nawrocki, Alaska Center for Conservation Science
 # Last Updated: 2021-10-06
 # Usage: Script should be executed in R 4.1.0+.
-# Description: "Calculate Independent Validation" calculates the proximity accuracy of independent VHF validation data relative to landscape mean distance to habitat.
+# Description: "Calculate proximal accuracy" calculates the proximity accuracy of independent VHF validation data relative to landscape mean distance to habitat.
 # ---------------------------------------------------------------------------
 
 # Define version
