@@ -11,7 +11,7 @@
 version = 'version_1.2_20210820'
 
 # Set root directory
-drive = 'N:'
+drive = 'D:'
 root_folder = 'ACCS_Work'
 
 # Define input data
@@ -90,8 +90,8 @@ height_plot = ggplot(site_height, aes(x=selection, y = height_max, color=group, 
   scale_color_manual(values = c(color_nocalf, color_calf)) +
   scale_fill_manual(values = c(color_nocalf, color_calf)) +
   theme_minimal() +
-  labs(x = 'Non-preferred/Preferred Habitat',
-       y = 'Max Willow Height (cm)') +
+  labs(x = 'Avoided/selected habitat',
+       y = 'Max willow height (cm)') +
   guides(color = 'none', fill = 'none') +
   theme(axis.title.y = element_markdown()) +
   coord_cartesian(xlim=c(-1,0.63), ylim=c(0,1000)) +
@@ -104,8 +104,8 @@ diversity_plot = ggplot(site_height, aes(x=selection, y = height_n, color=group,
   scale_color_manual(values = c(color_nocalf, color_calf)) +
   scale_fill_manual(values = c(color_nocalf, color_calf)) +
   theme_minimal() +
-  labs(x = 'Non-preferred/Preferred Habitat',
-       y = 'Number of Willow Sp.',
+  labs(x = 'Avoided/selected habitat',
+       y = 'Number of willow spp.',
        color = 'Group') +
   guides(fill = 'none') +
   theme(axis.title.y = element_markdown()) +
